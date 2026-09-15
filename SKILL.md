@@ -51,6 +51,17 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 - callout: `{"type":"callout","tone":"info|success|warning|error","title":"...","content":"..."}`
 - steps: `{"type":"steps","current":n,"steps":[{"title":"...","desc":"..."}]}`
 
+**tone 的合法值按组件不同（第二常见的校验失败）**
+
+| 组件 | 合法 tone |
+| --- | --- |
+| `callout` | info · success · **warning** · **error** |
+| `badge` | success · **warn** · **danger** · accent |
+| `card` | info · success · warning · **danger** |
+| `hero` | accent · success · warning · **danger** |
+
+`warn`/`danger` 在 badge 合法、在 callout 不合法；`error` 反之。写错时插件会归一到该组件的近义合法值并记一条 alias 警告，但别依赖它。
+
 ### 图表
 - chart: `{"type":"chart","kind":"bars|line|donut","data":[{"label":"...","value":n,"color":"#hex?"}],"series":[{"label":"...","data":[...]}]?,"horizontal":true?}` — bars 默认；line 趋势；donut 占比；**series：bars 是分组柱，line 是多序列折线**；**`horizontal:true` 画横向柱**（排行/长标签首选）；**`stacked:true` 把 series 堆叠**（构成/占比随时间）；堆叠段够高时数值直接印在段内，鼠标悬停任意柱/段/点/扇区都会弹出即时 tooltip（堆叠显示该段数值 + 合计）。v3 渲染：宽度自适应、Y 轴 1/2/5 刻度、单序列负值在零线以下真实绘制、line 带面积渐变与抽稀 X 标签、donut 图例显示数值与百分比。**≤8 个点的快速对比用 chart；多序列、需要缩放/交互或数据量大时用 echart**
 - plot: `{"type":"plot","series":[{"expr":"a*sin(b*x)","label":"...","color":"#hex?","params":[{"name":"a","value":1,"min":0,"max":5,"animateTo":3,"durationMs":4000,"loop":true},{"name":"b","value":1,"min":0.5,"max":5}]}],"xMin":-6.28,"xMax":6.28,"title":"..."}` — SVG 函数图；**series 可带 `"kind":"line|area|scatter"`**（缺省 line；area 填色到基线；scatter 散点）；**params 渲染成实时滑块**（拖动即时重绘，**y 轴锁定**=只变曲线不变数轴）；**animateTo 参数会显示播放按钮**（自动动画演示）；SVG 可拖拽平移、滚轮缩放；表达式支持 sin/cos/tan/asin/acos/atan/sqrt/cbrt/exp/log/ln/abs/floor/ceil/round/min/max/pow，常量 pi/e/tau，变量 x（其他字母=参数）

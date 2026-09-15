@@ -98,6 +98,15 @@ export function describeGenuiFenceFailure(raw: string): string | null {
   const semantic = processSemanticFailure(raw)
   if (semantic !== null) return semantic
   if (raw.trim() === '') return 'JSON 内容为空'
+  // A body the repair pass heals did not fail on its JSON: the renderer already
+  // ran that repair, so reporting the raw parse position sends the author after
+  // a bracket that is no longer the reason nothing rendered. Diagnose the healed
+  // spec instead, and say the JSON was repaired so the position is not missed.
+  const repaired = completeFenceJson(raw)
+  if (repaired !== null) {
+    const healed = processSemanticFailure(repaired.text)
+    if (healed !== null) return `${healed}（JSON 已自动修复 ${repaired.repairs} 处，真正的问题在字段本身）`
+  }
   const parse = describeJsonFailure(raw)
   return parse === null ? null : `JSON 解析失败${parse}`
 }

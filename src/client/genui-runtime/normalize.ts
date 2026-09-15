@@ -35,6 +35,29 @@ function normalizeAliasFields(value: Record<string, unknown>, path: string, type
   return out
 }
 
+/**
+ * Near-synonyms for a tone the target component does not accept.
+ *
+ * The vocabularies differ per component — `warn`/`danger` are legal on badge,
+ * card and hero, while callout spells the same two ideas `warning`/`error` —
+ * so the same word is right in one node and fatal in the next. Each entry is
+ * tried in order against THAT component's enum, so a value is repaired toward
+ * the meaning the author had rather than dropped.
+ */
+const TONE_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+  warn: ['warning', 'warn'],
+  warning: ['warn', 'warning'],
+  danger: ['error', 'danger'],
+  error: ['danger', 'error'],
+  critical: ['error', 'danger'],
+  caution: ['warning', 'warn'],
+  note: ['info'],
+  tip: ['info'],
+  ok: ['success'],
+  done: ['success'],
+  brand: ['accent'],
+}
+
 function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]): unknown {
   if (!isNode(value)) return value
   const type = value.type as string
@@ -42,9 +65,13 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
   // Custom nodes are opaque by contract: don't inspect or rewrite their data.
   if (definition === undefined) return value
   const out = normalizeAliasFields(value, path, type, warnings, definition.aliases)
-  if (type === 'hero' && out.tone === 'brand') {
-    out.tone = 'accent'
-    warnings.push({ kind: 'alias', path: `${path}.tone`, message: `${path}.tone value 'brand' normalized as 'accent'`, type, field: 'tone', canonical: 'accent' })
+  const toneEnum = definition.enums.tone
+  if (toneEnum !== undefined && typeof out.tone === 'string' && !toneEnum.includes(out.tone)) {
+    const canonical = TONE_SYNONYMS[out.tone]?.find(candidate => toneEnum.includes(candidate))
+    if (canonical !== undefined) {
+      warnings.push({ kind: 'alias', path: `${path}.tone`, message: `${path}.tone value '${out.tone}' normalized as '${canonical}'`, type, field: 'tone', canonical })
+      out.tone = canonical
+    }
   }
   const normalizeNodeValue = (child: unknown, childPath: string): unknown => normalizeNode(child, childPath, warnings)
   const normalizeNodeArray = (children: unknown, childPath: string): unknown => Array.isArray(children)

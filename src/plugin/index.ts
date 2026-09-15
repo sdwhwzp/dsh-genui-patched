@@ -97,6 +97,7 @@ The spec is a white-listed component tree rendered inline where the fence sits. 
 - 布局: text · row · col · grid · card · divider · spacer · hero（封面块：超大数字 + 标题 + tone 渐变底色，一条回答最多一个）
 - 展示: badge · stat · progress · list · table · keyvalue · avatar · audio · video · timeline · file-tree · breadcrumb · callout · steps · diff · json · code · copy
 - 子项字段有三个例外：\`keyvalue\` 用 \`pairs\`（\`[{"key","value"}]\`）、\`table\` 用 \`columns\`+\`rows\`、\`steps\` 用 \`steps\`；其余组件都用 \`items\`。写错会导致该节点被丢弃。
+- tone 的取值**按组件不同**：\`callout\` 是 info/success/warning/error；\`badge\` 是 success/warn/danger/accent；\`card\` 是 info/success/warning/danger；\`hero\` 是 accent/success/warning/danger。同一个词在别的组件里合法不代表这里合法（近义值会被自动归一并记一条警告）。
 - 图表: chart {"kind":"bars|line|donut","data":[{"label":"...","value":n}],"series":[{"label":"...","data":[...]}]?,"horizontal":true?,"stacked":true?}（series：bars 分组/堆叠 / line 多序列；horizontal 横向柱） · echart (preset: bar/line/area/pie/scatter/radar/gauge/funnel/treemap/sankey/graph/heatmap/bigline，或 option 直通) · plot (函数图)
 - 交互: button · input · textarea · select · checkbox · switch · slider · radio · submit · quiz · link · tabs · accordion
 - 高级: mermaid (flowchart/sequence/class/gantt/pie/er/state/journey) · diagram (编辑级架构/流程图，27 种 kind) · scene3d (3D WebGL)
