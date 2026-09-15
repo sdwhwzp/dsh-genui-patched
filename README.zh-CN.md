@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/f5db33ec-7471-4d4a-a85b-79c9962ab4ef
 
 前置条件，缺一不可：
 
-1. **dsh `^0.1.2-rc.1 || ^0.1.5-alpha.1`**（dsh-genui 0.10.0 已验证 DSH 0.1.5-rc.2，并保留 0.1.2-rc.1 下限验证；使用 DSH `<=0.1.1-rc.x` 的用户请使用 dsh-genui `0.9.8`）
+1. **dsh `^0.1.2-rc.1 || ^0.1.5-alpha.1`**（dsh-genui 0.11.0 已验证 DSH 0.1.5-rc.2，并保留 0.1.2-rc.1 下限验证；使用 DSH `<=0.1.1-rc.x` 的用户请使用 dsh-genui `0.9.8`）
 2. **`pnpm` 在 PATH 上**：`dsh plugin` 命令依赖它。没有就 `corepack enable`（或 `npm i -g pnpm`），然后**新开一个终端**，确认 `pnpm -v` 有输出
 
 安装并在 DSH 中激活（一行命令，自动带上全部依赖）：
@@ -170,7 +170,7 @@ dsh plugin --profile web add link:$PWD
 - **工具通道**：`render_ui` 工具把同一份 spec 渲染成工具行卡片（交付物型 UI 走工具、回答型 UI 走围栏）
 - **会话面板**：composer 上方常驻 dock，`render_ui` / `panel: true` 围栏原地更新同一块界面；`/panel` 命令客户端直开（`/panel <指令>` 转模型定制、`/panel clear` 清空）；顶边框可拖拽调高；`append: true` 增量合并——同名标签页追加内容、新标签页新增；整面板默认最多 200 节点 / 200 条追加，达到上限后模型应发送 `replace` 重建
 - **自愈与上限**：每个围栏过规格守卫——坏节点静默丢弃、数值钳位、字符串截断，整树 ≤200 节点 / 8 层嵌套，病态 spec 不会拖垮界面
-- **统一组件协议**：`card.label` → `title`、`table.data` → `rows`、`callout.kind` → `tone`、`steps.items` → `steps` 等原生字段别名会在校验和渲染前确定性归一化。行程还支持 `hero.number` → `value`、`steps.steps[].content` → `desc`、`keyvalue.items` → `pairs`、`keyvalue.pairs[].label` → `key`，显式提供的规范字段优先；这些兼容规则同时用于流式生成和重新打开已保存回复。`validate_dsh_ui` 会报告归一化结果，并对原生组件未知字段给出警告，同时保持自定义 renderer 节点的透明兼容。
+- **统一组件协议**：`card.label` → `title`、`table.data` → `rows`、`callout.kind` → `tone`、`steps.items` → `steps` 等原生字段别名会在校验和渲染前确定性归一化；`validate_dsh_ui` 会报告归一化结果，并对原生组件未知字段给出警告，同时保持自定义 renderer 节点的透明兼容。
 - **图错误自愈**：mermaid 渲染失败自动修复重试（剥反引号、引号化中文/空格标签、去 `<br/>`），仍失败才降级源码；错误图永不直接上屏
 - **可访问性**：tabs/折叠/开关/进度条带完整 ARIA 与键盘导航（方向键切页、Home/End 跳转）
 - **零打扰**：不装插件时围栏只是代码块，不报错、不污染会话
@@ -182,8 +182,6 @@ dsh plugin --profile web add link:$PWD
 - **首次提示**：第一块面板出现时显示 6 秒一次性提示（指向「模板」按钮），不打扰式引导。
 
 组件 JSON 语法见 [SKILL.md](./SKILL.md)。宿主提供公开 skill registry 时，插件会自动注册内置 `genui` skill，因此新会话无需向 `~/.dsh` 复制文件即可获得完整组件与字段目录。
-
-正常 `dsh-ui` 围栏直接生成，包括表格和多个组件；渲染器会自动修复可恢复的 JSON 错误。`validate_dsh_ui` 用于已渲染失败的围栏，或确有必要检查的 100 行以上手写 body。常规输出无需先把同一份 JSON 写进校验调用再重复生成到正文。
 
 `chart` 保持三种图形的紧凑渲染器：使用 `kind: 'bars' | 'line' | 'donut'`，且 `data[].value` 必须是有限数字。`validate_dsh_ui` 会明确报告误用的 `variant`、不支持的 kind 和非法数据字段；`render_ui` 对同样错误直接失败，不再静默渲染默认柱图。未知扩展字段仍允许存在。
 
@@ -231,6 +229,14 @@ dsh plugin --profile web add link:$PWD
 - **clone 后没有 lib/？** `pnpm install && pnpm run check` 自己构建。
 
 ## 🧑‍💻 开发
+
+### 嵌入其他应用
+
+支持 CSS Modules 和 TypeScript 的浏览器构建器可以从 `@changfenhuang/dsh-genui/embed` 导入 `GenuiBlock`、`GenuiActionContext`、`ErrorBoundary` 和 `processGenuiSpec`，复用同一份组件、样式与规格校验，无需加载 DSH 的插件入口。
+
+嵌入宿主通过 `initialState` / `onStateChange` 接管持久化，使用稳定的 `stateKey` 区分界面，通过 `GenuiActionContext.Provider` 接收动作。改变 `stateKey` 会开始新的交互生命周期；同一界面的后续刷新保留输入。设置 `onStateChange` 后不读写浏览器的交互状态存储。
+
+调用 `setGenuiAssetBase` 设置本地引擎目录；从公开的 `@changfenhuang/dsh-genui/assets/mermaid`、`assets/three`、`assets/echarts-core`、`assets/echarts` 构建对应脚本。模型指引从 `@changfenhuang/dsh-genui/skill` 读取。宿主只补自己的交付通道和设计变量；渲染器仍使用本包与 `@deepseek-ai/dsh-client-ui-primitives` 的组件。构建时提供 React、CSS Modules、KaTeX 字体及所用引擎依赖。
 
 ```sh
 pnpm install
@@ -280,7 +286,3 @@ npx tsx scripts/e2e-visual.mts --keep   # 保留 scratch DSH_HOME 便于排查
 ---
 
 📄 License: MIT
-
-### 已保存围栏的诊断
-
-`hero.tone` 的 `brand` 值归一化为 `accent`，已保存回答也适用。DOM 渲染通道对已完成但无效的围栏在原文旁显示具体错误；JSON 修正后清除诊断并恢复组件，无需重新生成其他内容。

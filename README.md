@@ -93,7 +93,7 @@ The repository ships both renderer channels, the host plugin, and the built brow
 
 Prerequisites — all required:
 
-1. **dsh `^0.1.2-rc.1 || ^0.1.5-alpha.1`** (dsh-genui 0.10.0 is verified on DSH 0.1.5-rc.2 and the 0.1.2-rc.1 minimum; users on DSH `<=0.1.1-rc.x` should use dsh-genui `0.9.8`)
+1. **dsh `^0.1.2-rc.1 || ^0.1.5-alpha.1`** (dsh-genui 0.11.0 is verified on DSH 0.1.5-rc.2 and the 0.1.2-rc.1 minimum; users on DSH `<=0.1.1-rc.x` should use dsh-genui `0.9.8`)
 2. **`pnpm` on your PATH**: the `dsh plugin` command depends on it. If missing: `corepack enable` (or `npm i -g pnpm`), then **open a new terminal** and confirm `pnpm -v` prints a version
 
 Install and activate in DSH (one command, all dependencies included):
@@ -170,14 +170,12 @@ The following is the detailed capability reference. Every behavior is constraine
 - **Tool channel**: the `render_ui` tool renders the same spec as a card in the tool row (deliverable-style UI goes through the tool, answer-style UI through the fence)
 - **Session panel**: a persistent dock above the composer; `render_ui` / `panel: true` fences update the same surface in place; `/panel` opens it from the client (`/panel <instruction>` customizes via the model, `/panel clear` clears); the top border is draggable to resize; `append: true` merges incrementally — same-named tabs append content, new tabs get added; the whole panel caps at 200 nodes / 200 appends, after which the model should send `replace` to rebuild
 - **Self-healing & limits**: every fence passes a spec guard — bad nodes are silently dropped, numbers clamped, strings truncated; the whole tree is capped at 200 nodes / 8 nesting levels; pathological specs never crash the UI
-- **Canonical component protocol**: native field aliases such as `card.label` → `title`, `table.data` → `rows`, `callout.kind` → `tone`, and `steps.items` → `steps` are normalized deterministically before validation and rendering. Itineraries also accept `hero.number` → `value`, `steps.steps[].content` → `desc`, `keyvalue.items` → `pairs`, and `keyvalue.pairs[].label` → `key`; explicit canonical fields take precedence. These aliases apply during streaming and when reopening saved replies. `validate_dsh_ui` reports these normalizations and warns about unknown native fields without blocking custom renderer nodes.
+- **Canonical component protocol**: native field aliases such as `card.label` → `title`, `table.data` → `rows`, `callout.kind` → `tone`, and `steps.items` → `steps` are normalized deterministically before validation and rendering. `validate_dsh_ui` reports these normalizations and warns about unknown native fields without blocking custom renderer nodes.
 - **Chart error self-healing**: mermaid failures auto-retry with repairs (strip backticks, quote Chinese/space labels, remove `<br/>`) before degrading to source; a broken chart never hits the screen
 - **Accessibility**: tabs/accordions/switches/progress bars carry full ARIA and keyboard navigation (arrow keys switch tabs, Home/End jump)
 - **Zero intrusion**: without the plugin, fences are just code blocks — no errors, no session pollution
 
 Component JSON syntax lives in [SKILL.md](./SKILL.md). On hosts with the public skill registry, the plugin registers this bundled `genui` skill automatically, so new Sessions receive the complete component and field catalog without copying files into `~/.dsh`.
-
-Emit ordinary `dsh-ui` fences directly, including tables and multiple components; the renderer repairs recoverable JSON errors automatically. Use `validate_dsh_ui` for a fence that failed to render, or a hand-written body of roughly 100+ lines that needs a bracket check. Ordinary output does not require writing the same JSON into a validation call before generating it again in the reply.
 
 `chart` stays the compact three-kind renderer: use `kind: 'bars' | 'line' | 'donut'` with finite numeric `data[].value` fields. `validate_dsh_ui` reports `variant`, unsupported kinds, and invalid datum fields explicitly; `render_ui` rejects the same errors instead of silently rendering the default bars view. Unknown extension fields remain allowed.
 
@@ -274,7 +272,3 @@ Overridable: `--port 3098`, `--out <dir>`, `DSH_BIN` (set it to the `apps/cli/li
 ---
 
 📄 License: MIT
-
-### Saved fence diagnostics
-
-The hero tone `brand` is normalized to `accent`, including saved replies. Invalid completed fences in the DOM rendering channel show an on-page diagnostic beside the unchanged source. Fixing the JSON removes the diagnostic and renders the UI without regenerating unrelated content.

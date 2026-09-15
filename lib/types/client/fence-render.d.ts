@@ -31,29 +31,6 @@ export interface GenuiFenceContext {
     readonly source?: GenuiFenceSource;
 }
 /**
- * Fallback for a ```dsh-ui fence whose body has no finished component yet.
- * Two very different situations land here and they must not be conflated:
- *
- * 1. **Streaming partial** — the reply is still being written and the JSON
- *    simply is not complete. The host marks the streaming message with
- *    `[data-streaming]` on the AssistantMarkdown root, which is an ancestor
- *    of every fence. While that marker is present, a plain code block is the
- *    correct rendering (partial JSON must never look like an error).
- *
- * 2. **Settled defect** — the message is finished but the body still does
- *    not parse as JSON (a malformed fence like a missing `}`) or violates the
- *    native chart contract. This used to fail silently: the fence degraded to
- *    a code block with no hint, and the author had no way to know the UI never
- *    rendered. Once the streaming marker is gone, surface a compact diagnostic
- *    so the defect is visible instead of silent.
- */
-/**
- * Describe a settled fence failure for either rendering channel.
- * @param raw - Original fence JSON.
- * @returns A diagnostic, or null when no failure is identified.
- */
-export declare function describeGenuiFenceFailure(raw: string): string | null;
-/**
  * Resolve a raw fence body to a guarded spec.
  *
  * - Tier-1 repair (quote escape + trailing commas): safe at any time —

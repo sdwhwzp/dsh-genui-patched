@@ -5,11 +5,15 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 
 # GenUI — 生成式 UI 输出规范
 
+**Language:** Match the user's requested language (otherwise the language of their message) in both surrounding prose and all user-visible UI text: titles, labels, content, options, and explanations. Chinese examples below illustrate the schema only; do not switch the conversation to Chinese after loading this skill. Keep JSON keys, component types, IDs, and actions unchanged. An English request gets English prose and UI text; a Chinese request gets Chinese prose and UI text.
+
 你可以**在回答正文中间**输出可交互 UI 组件：写一个 `dsh-ui` 围栏（fenced block with language tag `dsh-ui`），内含 JSON 规格，渲染器会把这一整块画成真实组件，文字照常穿插在前后。组件**就是回答的一部分**，不是工具调用。
 
 ```dsh-ui
 {"title":"可选标题","gap":14,"items":[...]}
 ```
+
+公式：`$...$` / `\(...\)` 为行内公式，`$$...$$` / `\[...\]` 为独立公式；支持矩阵、分段函数、多行对齐推导，以及加粗/高亮内的公式。正文、列表、键值、表头/单元格、卡片/步骤/时间线/标签页标题、题目与说明、按钮与表单标签、指标、媒体说明和图表外层标题共用此能力。JSON 字符串中的反斜杠必须双写，如 `"content": "\\(\\frac{a}{b}\\)"`。代码源码、输入值/占位符、原生下拉选项和图表引擎内部绘图文本仍遵循各自的原生格式，不解析富文本。数学语法以 KaTeX 为准，不执行 HTML、外部资源或脚本；不支持 LaTeX 文档编译、加载任意宏包。
 
 ## 组件词汇（只允许这些 type）
 
@@ -39,9 +43,6 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 - list: `{"type":"list","items":["..."] 或 [{"title":"...","desc":"..."}] 或嵌套节点(如 {"type":"badge","label":"TS"})}` — 行内可嵌节点（计入节点预算）
 - table: `{"type":"table","columns":["..."],"rows":[["...","..."]],"types":["text|num|delta|bar|badge"]?,"details":[[...]]?,"total":true?}` — 表头点击本地排序（升/降/还原，零往返）；数值感知：千分位（`1,234`）、`k/m/b`、`万/亿`、`%`、货币符号都能按真实数值比较，纯数值列自动右对齐；**带符号单元格自动着色**（`+12.4%` 绿、`-3` 红，无需额外字段）；`types` 可按列指定 `bar`（0-100 内联进度条）、`ring`（0-100 小环）、`spark`（单元格写 `"3,5,4,8"` 画微趋势线）、`badge`（胶囊标签）、`delta`（强制涨跌色）、`num`（强制右对齐）、`index`（行号）、`group`（首列当分组标题：该行只有第一格有内容时渲染成跨列小标题）；`"total":true` 追加合计行（数值列自动求和）；**`"export":true`**：表格上方出现「复制 Markdown / 复制 CSV」两个小按钮（纯本地剪贴板，不发请求）；**`"filter":"输入框id"`**：把表格和某个 input/select 绑定，读者输入即时过滤（`filterColumn` 可限定列）——数据多时**默认就该配一个**；**`"sortField":"下拉id"`** 用下拉的值（列名）排序；**`"details"` 与 rows 同序**，第 i 项是该行展开后的内容（可放任意组件，`null` = 该行不可展开）——首列出现 chevron，点开在整行下方展开明细，适合「主表 + 明细」
 - keyvalue: `{"type":"keyvalue","pairs":[{"key":"...","value":"..."}]}`
-  - ⚠️ **它用 `pairs`，不是 `items`**：整份规格里只有三个例外——`keyvalue` 用 `pairs`、`table` 用 `columns`+`rows`、`steps` 用 `steps`，其余组件都叫 `items`。
-    写成 `{"type":"keyvalue","items":[...]}` 时插件会归一化并记一条 alias 警告；但旧版本会直接丢弃该节点
-    （报错 `type 'keyvalue' requires pairs (array)` 加 `repair dropped N declared native node(s)`）。
 - timeline: `{"type":"timeline","items":[{"title":"...","desc":"...","time":"..."}]}`
 - file-tree: `{"type":"file-tree","items":[{"name":"...","type":"file|dir","children":[...]?}]}` — 目录行可点击折叠/展开（本地，零往返）
 - breadcrumb: `{"type":"breadcrumb","items":["首页","设置","账户"]}`
@@ -50,17 +51,6 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 - code: `{"type":"code","lang":"ts","code":"..."}`
 - callout: `{"type":"callout","tone":"info|success|warning|error","title":"...","content":"..."}`
 - steps: `{"type":"steps","current":n,"steps":[{"title":"...","desc":"..."}]}`
-
-**tone 的合法值按组件不同（第二常见的校验失败）**
-
-| 组件 | 合法 tone |
-| --- | --- |
-| `callout` | info · success · **warning** · **error** |
-| `badge` | success · **warn** · **danger** · accent |
-| `card` | info · success · warning · **danger** |
-| `hero` | accent · success · warning · **danger** |
-
-`warn`/`danger` 在 badge 合法、在 callout 不合法；`error` 反之。写错时插件会归一到该组件的近义合法值并记一条 alias 警告，但别依赖它。
 
 ### 图表
 - chart: `{"type":"chart","kind":"bars|line|donut","data":[{"label":"...","value":n,"color":"#hex?"}],"series":[{"label":"...","data":[...]}]?,"horizontal":true?}` — bars 默认；line 趋势；donut 占比；**series：bars 是分组柱，line 是多序列折线**；**`horizontal:true` 画横向柱**（排行/长标签首选）；**`stacked:true` 把 series 堆叠**（构成/占比随时间）；堆叠段够高时数值直接印在段内，鼠标悬停任意柱/段/点/扇区都会弹出即时 tooltip（堆叠显示该段数值 + 合计）。v3 渲染：宽度自适应、Y 轴 1/2/5 刻度、单序列负值在零线以下真实绘制、line 带面积渐变与抽稀 X 标签、donut 图例显示数值与百分比。**≤8 个点的快速对比用 chart；多序列、需要缩放/交互或数据量大时用 echart**
@@ -242,7 +232,7 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 
 1. **围栏放哪，组件就出现在哪** —— 文字在前后自然流动，不要用工具、不要解释"这是一个围栏"。**围栏一闭合就立即渲染**（不等整条回答结束），所以可以边写文字边出组件
 2. **组合优先**：复杂界面用 `grid`+`card`+`stat`+`table` 拼，不要追求单一巨型组件
-3. **JSON 必须严格合法**：括号配对、无尾随逗号，字符串内的中文引语用 `“”` 或 `「」`，避免未转义的半角引号。渲染器会修复可恢复的引号和逗号错误；回答结束后，还会尝试补齐缺失的引号/括号并移除不匹配的闭括号，只有修复结果能完整解析才采用。无法恢复的围栏保留为代码块并显示诊断。不要在 JSON 字符串里放 markdown；超长表格/列表拆成多个组件分开发，宁短勿长
+3. **JSON 必须严格合法，发出前完成 4 步自检**：插件**只**修标点级小错（字符串内半角引号、尾随逗号）；**缺括号/错括号等结构错误一律不修**，直接红横幅退化成代码块——写错就重发，别指望兜底。**最容易犯的错：字符串值里用了半角引号 `"`**——中文引语一律写 `“”` 或 `「」`。发出围栏前自检 4 条：① 括号配对：`{` 与 `}`、`[` 与 `]` 数量相等，**收尾序列逐个核对**（长表格最易在最后几行错位：把 `]]}]}` 写成 `]}]}]}`）② 无尾随逗号 ③ 值内引号用中文引号 ④ 最后一个字符必须是 `}`。不要在 JSON 字符串里放 markdown；超长表格/列表拆成多个组件分开发，宁短勿长
 4. **不要嵌套围栏**：dsh-ui 里不要再包 ``` 代码围栏
 5. **深色主题友好**：配色选深底亮色；UI 主题跟随应用
 6. **场景判断**：先查上面的映射表 —— 内容类型命中就上对应组件；只有纯文字问答、一句话能说清时才不用
@@ -250,4 +240,4 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 8. **规格要紧凑**：整棵组件树 ≤200 节点、≤8 层嵌套（超出部分会被渲染器裁掉），避免巨型 spec
 9. **一个主题选一个主组件**：命中映射表后选**一种**组件承载，同一信息不要用两种组件重复表达（同一批数据又画 bars 又画 donut = 冗余）
 10. **数量纪律**：一条回答 3–8 个组件为宜，宁缺毋滥。反例：该用 `table` 对比时写三段 `text`；一个 `stat` 能说清的事套 `card`+`grid`；与内容无关的 `scene3d` 炫技——3D 只在内容本身就是几何/空间时才用
-11. **正常围栏直接发**：不要先调 validate_dsh_ui 预校验；含 `table` 或多个组件也直接输出围栏，让读者随生成看到内容。只有围栏已渲染失败，或确实需要手写 100 行以上的大 body 并检查括号时，才调用 `validate_dsh_ui`（参数 `spec` 传围栏内的 JSON 文本）。返回 ✅ 后发出围栏；返回 ❌ 时按诊断修正，仍无法确认合法才重新验证。**若回复附了「已自动修复」的 JSON，直接照抄那份发出，无需再验证**。
+11. **先验后发（复杂 UI）**：发出 ```dsh-ui 围栏前，若 spec ≥3 个组件或含 `table`（长表格最易括号错位），先调用 `validate_dsh_ui` 工具（参数 `spec` 传围栏内的 JSON 文本）验证；返回 ❌ 就按错误信息（位置、括号计数、常见原因）修正后重新验证，✅ 再发出；**若 ❌ 回复里附了「已自动修复」的 JSON，直接照抄那份发出，无需再验证**；简单 UI（≤2 个组件）不必验证，渲染器会自动修复大部分标点/括号错误

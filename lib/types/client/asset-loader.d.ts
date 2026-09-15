@@ -17,6 +17,8 @@
  * query; the route serves no-cache anyway.
  * @module @changfenhuang/dsh-genui/client/asset-loader
  */
+/** Set once before rendering when the host bundles engines locally. */
+export declare function setGenuiAssetBase(baseURL: string): void;
 /** Resolve an asset URL, appending the bundle rev for cache busting when the
  * boot graph exposes it. */
 export declare function assetUrl(file: string): string;

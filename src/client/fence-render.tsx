@@ -73,6 +73,23 @@ function processSemanticFailure(raw: string): string | null {
 }
 
 /**
+ * Diagnose a body that only parses after the repair pass.
+ *
+ * The renderer already runs that repair before giving up, so reporting the raw
+ * parse position sends the author after a bracket that is no longer the reason
+ * nothing rendered. When the healed body still fails validation, that failure
+ * is the actionable one; the repair count keeps the original defect visible.
+ * @param raw - the fence body as written.
+ * @returns the healed body's diagnostic, or null when repair or validation is not the story.
+ */
+function repairedSemanticFailure(raw: string): string | null {
+  const repaired = completeFenceJson(raw)
+  if (repaired === null) return null
+  const healed = processSemanticFailure(repaired.text)
+  return healed === null ? null : `${healed}（JSON 已自动修复 ${repaired.repairs} 处，真正的问题在字段本身）`
+}
+
+/**
  * Fallback for a ```dsh-ui fence whose body has no finished component yet.
  * Two very different situations land here and they must not be conflated:
  *
@@ -89,28 +106,6 @@ function processSemanticFailure(raw: string): string | null {
  *    rendered. Once the streaming marker is gone, surface a compact diagnostic
  *    so the defect is visible instead of silent.
  */
-/**
- * Describe a settled fence failure for either rendering channel.
- * @param raw - Original fence JSON.
- * @returns A diagnostic, or null when no failure is identified.
- */
-export function describeGenuiFenceFailure(raw: string): string | null {
-  const semantic = processSemanticFailure(raw)
-  if (semantic !== null) return semantic
-  if (raw.trim() === '') return 'JSON 内容为空'
-  // A body the repair pass heals did not fail on its JSON: the renderer already
-  // ran that repair, so reporting the raw parse position sends the author after
-  // a bracket that is no longer the reason nothing rendered. Diagnose the healed
-  // spec instead, and say the JSON was repaired so the position is not missed.
-  const repaired = completeFenceJson(raw)
-  if (repaired !== null) {
-    const healed = processSemanticFailure(repaired.text)
-    if (healed !== null) return `${healed}（JSON 已自动修复 ${repaired.repairs} 处，真正的问题在字段本身）`
-  }
-  const parse = describeJsonFailure(raw)
-  return parse === null ? null : `JSON 解析失败${parse}`
-}
-
 function FenceFallback({ raw, fenceKey }: { raw: string; fenceKey: Key }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [settled, setSettled] = useState(false)
@@ -118,7 +113,7 @@ function FenceFallback({ raw, fenceKey }: { raw: string; fenceKey: Key }) {
     const node = ref.current
     if (node !== null && node.closest('[data-streaming]') === null) setSettled(true)
   })
-  const processDiagnostic = settled ? processSemanticFailure(raw) : null
+  const processDiagnostic = settled ? processSemanticFailure(raw) ?? repairedSemanticFailure(raw) : null
   const parseDiagnostic = settled && processDiagnostic === null && raw.trim() !== '' ? describeJsonFailure(raw) : null
   return (
     <div ref={ref}>

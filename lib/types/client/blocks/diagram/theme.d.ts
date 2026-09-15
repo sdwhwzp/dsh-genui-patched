@@ -21,18 +21,10 @@ export interface DiagramPalette {
     accentTint: string;
     link: string;
 }
-/**
- * Palette derived from the HOST design tokens.
- *
- * The hardcoded editorial skin (paper #f5f5f5, orange accent #eb6c36) has
- * nothing to do with the surrounding UI: a diagram dropped into a light chat
- * came out as a grey slab with a salmon "focal" node. SVG attributes cannot
- * resolve CSS variables, so the tokens are read as literals here — same
- * approach as the ECharts theming.
- */
-export declare function hostPalette(el?: Element | null): DiagramPalette;
+/** Native SVG paint values keep inherited host tokens live across theme changes. */
+export declare function hostPalette(): DiagramPalette;
 /** Resolve the active palette from variant + optional theme overrides. */
-export declare function resolvePalette(variant: GenuiDiagramVariant | undefined, theme: GenuiDiagramTheme | undefined, el?: Element | null): DiagramPalette;
+export declare function resolvePalette(variant: GenuiDiagramVariant | undefined, theme: GenuiDiagramTheme | undefined): DiagramPalette;
 /** Node treatment → { fill, stroke, dashed } per diagram-design §5. */
 export declare function nodeTreatment(type: string | undefined, p: DiagramPalette): {
     fill: string;
@@ -41,5 +33,5 @@ export declare function nodeTreatment(type: string | undefined, p: DiagramPalett
 };
 /** Edge stroke color per semantic kind. */
 export declare function edgeStroke(kind: string | undefined, p: DiagramPalette): string;
-/** Helper: a color at a given opacity (accepts #hex and rgba() strings). */
+/** Apply opacity while retaining live host-token references. */
 export declare function inkAt(color: string, opacity: number): string;

@@ -51,7 +51,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GenuiActionContext, type GenuiActionHandler } from './action-context.ts'
 import css from './GenuiBlock.module.css'
-import { describeGenuiFenceFailure, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
+import { renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
 
 /** Fence surfaces the channel can take over, newest host first: the shared
  * CodeBlock surface every rc.6+ markdown fence renders through
@@ -159,7 +159,7 @@ function infostringOf(block: Element): string | null {
   const pre = block.querySelector('pre')
   for (const el of block.querySelectorAll('*')) {
     if (el.childElementCount !== 0) continue
-    if (el.textContent !== 'dsh-ui') continue
+    if (el.textContent?.trim() !== 'dsh-ui') continue
     if (pre !== null && pre.contains(el)) continue
     // A leaf label that belongs to a NESTED known code surface is that
     // surface's banner, not `block`'s own banner. Only accept labels whose
@@ -181,7 +181,7 @@ function labelTextOf(block: Element): string {
   for (const el of block.querySelectorAll('*')) {
     if (el.childElementCount !== 0) continue
     if (pre !== null && pre.contains(el)) continue
-    return el.textContent ?? ''
+    return el.textContent?.trim() ?? ''
   }
   return ''
 }
@@ -247,7 +247,10 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
     if (seen.has(el)) continue
     // Message-level containers that happen to carry a surface class must
     // not be taken over: hiding them hides the whole answer (issue #19).
-    if (!isPlausibleFenceSurface(el)) continue
+    if (!isPlausibleFenceSurface(el)) {
+      if (infostringOf(el) === 'dsh-ui') warnImplausibleSurface(el)
+      continue
+    }
     out.push(el)
     seen.add(el)
   }
@@ -263,10 +266,8 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
     if (surface === null) {
       // Diagnose the issue #19 guard: a labeled ancestor that is NOT a code
       // surface (prose/multiple code bodies) was skipped on purpose.
-      if (implausibleLabeledAncestorOf(pre, scope) !== null && !plausibilityWarned) {
-        plausibilityWarned = true
-        console.warn('[dsh-genui] 跳过带 dsh-ui 标签但疑似消息容器的节点（含段落或多个代码体）——防止 DOM 通道隐藏整条消息（issue #19）')
-      }
+      const rejected = implausibleLabeledAncestorOf(pre, scope)
+      if (rejected !== null) warnImplausibleSurface(rejected)
       continue
     }
     if (seen.has(surface)) continue
@@ -286,8 +287,16 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
 /** One-time-per-install drift diagnostic flag (reset per install, so tests
  * and hot re-installs each get a fresh warning budget). */
 let driftWarned = false
-/** One-time-per-install issue #19 guard diagnostic (same budget). */
-let plausibilityWarned = false
+/** A rejected surface gets one diagnostic; never log its conversation text. */
+let plausibilityWarned = new WeakSet<Element>()
+function warnImplausibleSurface(surface: Element): void {
+  if (plausibilityWarned.has(surface)) return
+  plausibilityWarned.add(surface)
+  const pres = surface.querySelectorAll('pre')
+  const tags = [...surface.querySelectorAll(BLOCK_CONTENT_SELECTOR)]
+    .filter(el => !el.closest('pre')).map(el => el.tagName.toLowerCase())
+  console.warn(`[dsh-genui] 跳过带 dsh-ui 标签但疑似消息容器的节点：pre=${pres.length}, outside-code=${[...new Set(tags)].join(',') || 'none'}；保留原文，防止隐藏整条消息（issue #19）`)
+}
 
 /** Root factory seam (tests / tuning): the DOM channel creates one React root
  * per taken-over fence through this indirection so mount-failure cleanup is
@@ -384,27 +393,8 @@ export function installDomFenceRenderer(
 ): () => void {
   if (typeof document === 'undefined') return () => {}
   driftWarned = false
-  plausibilityWarned = false
+  plausibilityWarned = new WeakSet<Element>()
   const mounts = new Map<HTMLElement, Mount>()
-  const diagnostics = new Map<HTMLElement, HTMLElement>()
-  function clearDiagnostic(block: HTMLElement): void {
-    diagnostics.get(block)?.remove()
-    diagnostics.delete(block)
-  }
-  function showDiagnostic(block: HTMLElement, raw: string): void {
-    const message = describeGenuiFenceFailure(raw) ?? '规格无法渲染'
-    let notice = diagnostics.get(block)
-    if (notice === undefined) {
-      notice = document.createElement('div')
-      notice.className = 'genui-fence-diagnostic'
-      notice.setAttribute('role', 'alert')
-      notice.style.cssText = 'margin:0 0 6px;padding:6px 10px;border:1px solid #ef4444;border-radius:6px;white-space:pre-wrap'
-      diagnostics.set(block, notice)
-    }
-    const text = `⚠️ dsh-ui ${message}。原始内容保留在下方；可调用 validate_dsh_ui 修正。`
-    if (notice.textContent !== text) notice.textContent = text
-    if (notice.nextElementSibling !== block) block.before(notice)
-  }
   let disposed = false
   let rafId: number | null = null
 
@@ -467,10 +457,9 @@ export function installDomFenceRenderer(
     // streaming the fence is identified by CONTENT — a partial parse that
     // yields a GenUI node. A misidentified fence (e.g. a ```json block that
     // happens to parse) is reverted at the settle transition below.
-    if (settled && infostringOf(block) === null) { clearDiagnostic(block); return }
+    if (settled && infostringOf(block) === null) return
     const raw = rawOf(block)
     if (raw.trim() === '') {
-      if (settled) showDiagnostic(block, raw)
       if (settled) warnOnce(block, 'settled dsh-ui fence has an empty body; keeping the code block')
       return
     }
@@ -478,18 +467,18 @@ export function installDomFenceRenderer(
     const node: ReactNode | null = renderResolvedFenceNode(raw, key, context)
     // Null = no finished component yet (streaming half) or unrepairable:
     // the stock code block stays visible until something renders. A settled
-    // unrepairable body shows a diagnostic above the unchanged stock block.
+    // unrepairable body warns once (the DOM channel has no visible
+    // diagnostic of its own — the stock block keeps the raw content).
     let payload = node
     if (payload === null) {
       if (settled || !looksLikeGenuiInProgress(raw)) {
-        if (settled) { showDiagnostic(block, raw); warnOnce(block, 'settled dsh-ui fence body does not parse or validate; keeping the code block') }
+        if (settled) warnOnce(block, 'settled dsh-ui fence body does not parse; keeping the code block')
         return
       }
       // Streaming, spec-shaped, nothing renderable yet: show the skeleton
       // rather than a wall of half-written JSON.
       payload = <GenuiSkeleton />
     }
-    clearDiagnostic(block)
     // Mount FIRST, hide AFTER (issue #19): the stock block is only ever
     // hidden once a successfully mounted replacement stands next to it. A
     // mount failure leaves the original code block untouched — the final
@@ -574,9 +563,6 @@ export function installDomFenceRenderer(
    * new dsh-ui block — settled or still streaming. */
   function sweep(): void {
     if (disposed) return
-    for (const block of diagnostics.keys()) {
-      if (!block.isConnected || !isSettled(block)) clearDiagnostic(block)
-    }
     for (const [block, mount] of mounts) {
       if (!block.isConnected) {
         unmountBlock(block)
@@ -722,6 +708,5 @@ export function installDomFenceRenderer(
       rafId = null
     }
     for (const block of Array.from(mounts.keys())) unmountBlock(block)
-    for (const block of Array.from(diagnostics.keys())) clearDiagnostic(block)
   }
 }

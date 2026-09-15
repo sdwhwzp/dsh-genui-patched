@@ -13,9 +13,11 @@ function isNode(value: unknown): value is Record<string, unknown> {
   return candidate !== undefined && typeof candidate.type === 'string'
 }
 
-function normalizeAliasFields(value: Record<string, unknown>, path: string, type: string, warnings: GenuiDiagnostic[], aliases: Readonly<Record<string, string>>): Record<string, unknown> {
+function normalizeAliasFields(value: Record<string, unknown>, path: string, type: string, warnings: GenuiDiagnostic[]): Record<string, unknown> {
+  const definition = COMPONENT_SCHEMAS[type]
+  if (definition === undefined) return value
   const out: Record<string, unknown> = { ...value }
-  for (const [alias, canonical] of Object.entries(aliases)) {
+  for (const [alias, canonical] of Object.entries(definition.aliases)) {
     if (!(alias in out)) continue
     const aliasPath = `${path}.${alias}`
     const keptCanonical = canonical in out
@@ -64,8 +66,16 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
   const definition = COMPONENT_SCHEMAS[type]
   // Custom nodes are opaque by contract: don't inspect or rewrite their data.
   if (definition === undefined) return value
-  const out = normalizeAliasFields(value, path, type, warnings, definition.aliases)
-  const toneEnum = definition.enums.tone
+  const out = normalizeAliasFields(value, path, type, warnings)
+  if (type === 'keyvalue' || type === 'steps') {
+    const field = type === 'keyvalue' ? 'pairs' : 'steps'
+    if (!(field in out) && Array.isArray(out.items)) {
+      out[field] = out.items
+      delete out.items
+      warnings.push({ kind: 'alias', path: `${path}.items`, message: `${path}.items normalized/adopted as '${field}'`, type, field: 'items', canonical: field })
+    }
+  }
+  const toneEnum = COMPONENT_SCHEMAS[type]?.enums.tone
   if (toneEnum !== undefined && typeof out.tone === 'string' && !toneEnum.includes(out.tone)) {
     const canonical = TONE_SYNONYMS[out.tone]?.find(candidate => toneEnum.includes(candidate))
     if (canonical !== undefined) {
@@ -78,15 +88,7 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
     ? children.map((child, index) => normalizeNodeValue(child, `${childPath}[${index}]`))
     : children
 
-  if (type === 'keyvalue' || type === 'steps') {
-    const field = type === 'keyvalue' ? 'pairs' : 'steps'
-    const aliases: Readonly<Record<string, string>> = type === 'keyvalue' ? { label: 'key' } : { content: 'desc' }
-    const entries = out[field]
-    if (Array.isArray(entries)) out[field] = entries.map((entry, index) => {
-      const holder = record(entry)
-      return holder === undefined ? entry : normalizeAliasFields(holder, `${path}.${field}[${index}]`, type, warnings, aliases)
-    })
-  } else if (type === 'row' || type === 'col' || type === 'grid' || type === 'card' || type === 'file-tree' || type === 'timeline' || type === 'breadcrumb') {
+  if (type === 'row' || type === 'col' || type === 'grid' || type === 'card' || type === 'file-tree' || type === 'timeline' || type === 'breadcrumb') {
     if (type !== 'file-tree' && type !== 'timeline' && type !== 'breadcrumb') out.items = normalizeNodeArray(out.items, `${path}.items`)
   } else if (type === 'list' && Array.isArray(out.items)) {
     out.items = out.items.map((child, index) => isNode(child) ? normalizeNodeValue(child, `${path}.items[${index}]`) : child)
@@ -142,10 +144,11 @@ export function normalizeGenuiSpec(value: unknown): { value: unknown; warnings: 
   const warnings: GenuiDiagnostic[] = []
   const root = record(value)
   if (root === undefined) return { value, warnings }
-  if (typeof root.type === 'string') return { value: normalizeNode(root, 'spec', warnings), warnings }
   const out = { ...root }
   if (Array.isArray(out.items)) {
     out.items = out.items.map((item, index) => normalizeNode(item, `items[${index}]`, warnings))
+  } else if (typeof out.type === 'string') {
+    return { value: normalizeNode(out, 'spec', warnings), warnings }
   }
   return { value: out, warnings }
 }

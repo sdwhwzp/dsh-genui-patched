@@ -27,8 +27,6 @@
 import { type GenuiSpec } from './spec.ts';
 /** Default repair-candidate budget (adjustable; see the design doc). */
 export declare const MAX_PARTIAL_REPAIR_ATTEMPTS = 32;
-/** How many early-closed roots one body may carry before the repair gives up. */
-export declare const MAX_REATTACH_PASSES = 8;
 /** Override the repair-candidate budget (tests / tuning). */
 export declare function setMaxPartialRepairAttempts(n: number): void;
 /** One repair candidate: a balanced prefix of the body ending at `end`,
@@ -56,26 +54,6 @@ export declare function collectPartialCandidates(raw: string): {
     candidates: PartialCandidate[];
     scannedChars: number;
 };
-/**
- * Reattach components the model stranded outside an early-closed root.
- *
- * Observed in the wild: the model closes `items` and the root object, then
- * keeps appending components as if still inside the array —
- * `{"title":…,"items":[A,B]},{"type":"table",…}]}`. The body is not
- * incomplete, so tier-2 completion does not apply; and the forward scan stops
- * at the first unbalanced close, so the longest candidate stays the
- * already-closed prefix. The card therefore freezes on A and B for the rest
- * of the message and only fills in once the message settles.
- *
- * The repair is deterministic string surgery, safe while streaming: it fires
- * only when a COMPLETE root object is followed by `,`, and it reopens that
- * root's `items` array so the stranded text continues it. Whatever follows is
- * still handed to the normal candidate scan, so a half-written trailing
- * component is dropped exactly as before.
- * @param text - the trimmed fence body.
- * @returns the reopened body, or null when this damage is not present.
- */
-export declare function reattachStrandedItems(text: string): string | null;
 /**
  * Parse a possibly incomplete genui spec body.
  * @param raw - the fence body as accumulated so far.
