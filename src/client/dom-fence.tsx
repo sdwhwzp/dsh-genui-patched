@@ -210,7 +210,7 @@ function isSettled(block: Element): boolean {
  * (see {@link isPlausibleFenceSurface}). */
 function surfaceOf(pre: HTMLElement, scope: ParentNode = document): HTMLElement | null {
   let el: HTMLElement | null = pre.parentElement
-  for (let hops = 0; el !== null && el !== scope && hops < SURFACE_HOPS; hops += 1, el = el.parentElement) {
+  for (let hops = 0; el !== null && el !== scope && hops < SURFACE_HOPS; hops += 1, el = el?.parentElement ?? null) {
     if (infostringOf(el) !== 'dsh-ui') continue
     if (!isPlausibleFenceSurface(el)) return null
     return el
@@ -222,7 +222,7 @@ function surfaceOf(pre: HTMLElement, scope: ParentNode = document): HTMLElement 
  * diagnostics for the issue #19 guard so a skipped fence is never silent. */
 function implausibleLabeledAncestorOf(pre: HTMLElement, scope: ParentNode = document): HTMLElement | null {
   let el: HTMLElement | null = pre.parentElement
-  for (let hops = 0; el !== null && el !== scope && hops < SURFACE_HOPS; hops += 1, el = el.parentElement) {
+  for (let hops = 0; el !== null && el !== scope && hops < SURFACE_HOPS; hops += 1, el = el?.parentElement ?? null) {
     if (infostringOf(el) === 'dsh-ui' && !isPlausibleFenceSurface(el)) return el
   }
   return null
