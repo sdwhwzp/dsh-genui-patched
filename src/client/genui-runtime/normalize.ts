@@ -13,11 +13,10 @@ function isNode(value: unknown): value is Record<string, unknown> {
   return candidate !== undefined && typeof candidate.type === 'string'
 }
 
-function normalizeAliasFields(value: Record<string, unknown>, path: string, type: string, warnings: GenuiDiagnostic[]): Record<string, unknown> {
-  const definition = COMPONENT_SCHEMAS[type]
-  if (definition === undefined) return value
+function normalizeAliasFields(value: Record<string, unknown>, path: string, type: string, warnings: GenuiDiagnostic[], aliases = COMPONENT_SCHEMAS[type]?.aliases): Record<string, unknown> {
+  if (aliases === undefined) return value
   const out: Record<string, unknown> = { ...value }
-  for (const [alias, canonical] of Object.entries(definition.aliases)) {
+  for (const [alias, canonical] of Object.entries(aliases)) {
     if (!(alias in out)) continue
     const aliasPath = `${path}.${alias}`
     const keptCanonical = canonical in out
@@ -73,6 +72,22 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
       out[field] = out.items
       delete out.items
       warnings.push({ kind: 'alias', path: `${path}.items`, message: `${path}.items normalized/adopted as '${field}'`, type, field: 'items', canonical: field })
+    }
+  }
+  if (type === 'diff') {
+    if (record(out.diffs) !== undefined) {
+      out.diffs = [out.diffs]
+      warnings.push({ kind: 'alias', path: `${path}.diffs`, message: `${path}.diffs wrapped as a single-record array`, type, field: 'diffs', canonical: 'diffs' })
+    }
+    if (Array.isArray(out.diffs)) {
+      out.diffs = out.diffs.map((entry, index) => {
+        const holder = record(entry)
+        return holder === undefined ? entry : normalizeAliasFields(holder, `${path}.diffs[${index}]`, type, warnings, {
+          file: 'path', filePath: 'path', filename: 'path',
+          new: 'newText', after: 'newText', content: 'newText',
+          old: 'oldText', before: 'oldText',
+        })
+      })
     }
   }
   const toneEnum = COMPONENT_SCHEMAS[type]?.enums.tone

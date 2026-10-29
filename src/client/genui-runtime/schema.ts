@@ -275,7 +275,9 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
     nested: { nodes: diagramNodeSchema, edges: diagramEdgeSchema, zones: diagramZoneSchema, theme: diagramThemeSchema },
     enums: { kind: DIAGRAM_KINDS, variant: DIAGRAM_VARIANTS },
   }),
-  diff: schema(['diffs'], { ...nodeFields, diffs: 'array' }, {}, { nested: { diffs: diffRecordSchema } }),
+  diff: schema(['diffs'], { ...nodeFields, diffs: 'array' }, { diff: 'diffs', changes: 'diffs', files: 'diffs' }, {
+    nested: { diffs: diffRecordSchema },
+  }),
   divider: schema([], nodeFields),
   echart: schema([], { ...nodeFields, title: 'string', height: 'number', preset: 'string', data: 'array', series: 'array', links: 'array', palette: 'array', option: 'object' }, {}, {
     // `links` alone is valid: the sankey/graph presets are edge-driven.
